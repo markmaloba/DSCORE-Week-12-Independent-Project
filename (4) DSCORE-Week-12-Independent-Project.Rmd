@@ -1,0 +1,368 @@
+---
+title: "DSCORE-Week-12-Independent-Project"
+author: "Mark Maloba"
+date: "2/28/2020"
+output: html_document
+smart: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Background
+A Kenyan entrepreneur has created an online cryptography course and would want to advertise it on her blog. She currently targets audiences originating from various countries. In the past, she ran ads to advertise a related course on the same blog and collected data in the process. She would now like to employ your services as a Data Science Consultant to help her identify which individuals are most likely to click on her ads.   
+
+# Defining the Question
+Can we identify a single most important demographic from within our client's target audience, for her to target with her advertising?
+
+# Metric for Success
+Our metric for success will be succesfully comparing each feature to each other feature.
+
+# Experimental Design Choice
+All our research will be centered around whether or not a certain demographic or sub-group of the population click on ads or not. We will compare that against city, income, time spent on site and age.
+
+We will also study different **correlation indices** to see which ones negatively and positively affect the likelihood to click on ads.  
+
+# Is the data appropriate enough to answer our question?
+Yes it is, considering our design choices. We can do our analysis and give our enterpreneur client a satisfactory answer.
+
+# ----- ANALYSIS -----
+## Understanding our data
+
+
+```{r}
+library(rmarkdown)
+```
+
+```{r}
+url = 'http://bit.ly/IPAdvertisingData'
+audience_df <- read.csv(url)
+audience_df
+```
+From the CSV file loaded above, we can see that our data comprises of 10 different features, in cluding all the ones described in our *Design Choice* section above.  There are 1000 records in total.  
+
+We can also confirm this by running the dimension function
+
+```{r}
+dim (audience_df)
+
+```
+
+After takingthe time to explore the dataset, I have come up with about 13 key comparisons I want to perform to ensure we get the best answer possible as far as determining the "most profitable demographic".  
+
+Some feature engineering will also be required, for example when coming up with a separate metric for **time spent on site** vs **daily internet usage**. More feature engineering cases may reveal themselves along the way as we continue analysis. This is just a preliminary visual check.  
+
+### A few caveats...
+I will drop the *Ad topics* column because natural language processing is not within the scope of this project. 
+
+The true meaning of the income column is unclear, but I will take it to be a representation of the user's income. That's the **first assumption** I'm making, solely due to lack of information.
+
+The **second assumption** I will make is that the composition of ALL the blog articles is identical. We need to acknowledge this ibecause in the real world, the content of your article does a lot to influence user perception, and that can or cannot translate into ad engagement. That is why, for example, clickbait titles and content are so popular.  
+
+
+
+Let's continue... 
+
+
+### Summary of our dataframe
+```{r}
+summary(audience_df)
+```
+From the table above, we can see all our measures of central tendency (median, mean).
+
+It would also be helpfull to check the ranges for Age, usage times and user income.
+
+**Time Spent on Site by users**
+
+```{r}
+site.time.range <- range(audience_df$Daily.Time.Spent.on.Site)
+site.time.range
+```
+**Daily Internet Usage**
+
+```{r}
+internet.time.range <- range(audience_df$Daily.Internet.Usage)
+internet.time.range
+```
+
+
+**Age**
+```{r}
+age.range <- range(audience_df$Age)
+age.range
+```
+This is a very large range for the sites users. But this alone isn't very actionable data. A distribution graph will tell us how the users skew.
+
+**Income**
+```{r}
+income.range <- range(audience_df$Area.Income)
+income.range
+```
+Because we don't know the currency, this really doesn't mean much. It could all be Zimbabwean Dollars. Also, I can't think of any concievable way that they'd collect this data from users. So did they use a proxy? Are they illegally tracking users. This metric is moot!
+
+### Structure of our dataframe
+```{r}
+str(audience_df)
+```
+
+All the data types are floating point numbers, except for the text fields (Country, Topic line etc) which are held in data structures called *Factors*.
+
+## Feature Engineering
+
+I will now drop the *ad.topic.line* column.
+
+```{r}
+
+audience_df2 = subset(audience_df, select = -c(Ad.Topic.Line) )
+
+str(audience_df2)
+```
+
+I will now attempt to split the *Timestamp* column. I'm only interested in the month, and day of the week. For the time, I want the hour of day. We can do a lot of cool analyses with this.
+
+```{r}
+# But first, a little backup 
+audience_df3 <- audience_df2
+```
+
+```{r}
+audience_df3$Date <- as.Date(audience_df3$Timestamp)
+#df$Time <- format(as.POSIXct(df$Start) ,format = "%H:%M:%S")
+
+head(audience_df3)
+```
+We can also derive the month of the year from our timestamp.
+
+```{r}
+audience_df3$month <- format(as.POSIXct(strptime(audience_df3$Timestamp,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%m")
+```
+
+```{r}
+head(audience_df3)
+```
+
+
+
+So far so good! Let's try to separate the hour of day as well.
+
+```{r}
+audience_df3$hour <- format(as.POSIXct(strptime(audience_df3$Timestamp,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%H")
+head(audience_df3)
+```
+
+
+# Exploratory Data Analysis
+Let's run the all-knowing, all summarising *dataMaid* package. It comes with various functions that may very well contain the answers to everything we need 😎
+
+```{r}
+install.packages("dataMaid", repos = "http://cran.us.r-project.org")
+```
+
+Just before we explore those packages, I think *inspectDF* may provide more insight as far as EDA goes. We will use *dataMaid* for correlation tests (Pearson etc)
+
+```{r}
+install.packages("inspectdf", repos = "http://cran.us.r-project.org")
+
+```
+
+```{r}
+library(dplyr)
+library(inspectdf)
+```
+
+And now we can EXPLORE!
+
+```{r}
+inspect_cat(audience_df3, show_plot = TRUE)
+
+```
+Here is a check for correlation between the different columns
+
+```{r}
+inspect_cor(audience_df3, df2 = NULL, method = "pearson", with_col = 'Clicked.on.Ad',
+alpha = 0.05, show_plot = FALSE)
+
+```
+The summary above covers  Pearson’s correlation coefficients for all the numeric columns, compared against the *Clicked.On.Ads* column. I did not want to take out the *Male* column since I still need it for other analyses. THis works best with float numbers.
+
+Across the board, we can see that there are negative correlation values for *Daily.Internet.Usage*, *Daily.Time.Spent.on.Site*, *Area Income*. The only positive correlation is between *Clicked.On.Ad* and *Age*.
+
+One mistake that I've realised however, is that the very feature I'm comparing everything against is categorical. That means that the above correlation tests don't mean much to us. I will now work on grouping operations to get better results.
+
+I'll try one more type of correlation, where each feature is compared against everything else, in pairs.  
+
+
+```{r}
+inspect_cor(audience_df3, df2 = NULL, method = "pearson",
+alpha = 0.05, show_plot = FALSE)
+```
+Now  let's do a comparison specifically for categorical columns.
+
+```{r}
+inspect_imb(audience_df3, df2 = NULL, show_plot = FALSE, include_na = FALSE)
+```
+According to this, 90% of our client's users are from the Czech Republic.That doesn't seem right, because from the *Summary()* function above, we can see that Czech republic appears 9 times, out of 1000 records. It is the mode for that column. I'll keep trying to find a method that's more accurate. 
+
+Let's try generating a Data Report.
+
+```{r}
+#makeDataReport(audience_df3)
+```
+The report was generated and opened externally in Microsoft Word. The only actionable information it gave us was the distribution curves for each column, ass well as the mode for each.
+
+## Bivariate Analysis visualization
+
+I plan on using the *Clicked.On.Ad* feature to determine fill colors for these graphs, but that won't work if they stay as they're currently set (integer data type). I'll change that in the following code chunk.
+
+```{r}
+audience_df4 <- audience_df3
+```
+```{r}
+audience_df4$Clicked.on.Ad = as.factor(audience_df4$Clicked.on.Ad)
+```
+
+
+
+**Age**
+```{r}
+library(ggplot2)
+```
+
+
+```{r}
+options(repr.plot.width = 13, repr.plot.height = 7)
+ggplot(data = audience_df4, aes(x = Age, fill = Clicked.on.Ad))+
+    geom_histogram(bins = 35, color = 'cyan') + 
+    labs(title = 'Age distribution', x = 'Age', y = 'Frequency', fill = 'Clicked.on.Ad') +
+        scale_color_brewer(palette = 'Set1') +
+        theme(plot.title = element_text(size = 18, face = 'bold', color = 'darkmagenta'),
+             axis.title.x = element_text(size = 15, face = 'bold', color = 'darkmagenta'),
+             axis.title.y = element_text(size = 15, face = 'bold', color = 'darkmagenta'),
+             axis.text.x = element_text(size = 13, angle = 45),
+             axis.text.y = element_text(size = 13),
+             legend.title = element_text(size = 13, color = 'darkmagenta'),
+             legend.text = element_text(size = 12))
+```
+             
+**Income**
+```{r}
+library (ggplot2)
+```
+
+```{r}
+options(repr.plot.width = 13, repr.plot.height = 7)
+ggplot(data = audience_df4, aes(x = Area.Income, fill = Clicked.on.Ad))+
+    geom_histogram(bins = 35, color = 'cyan') + 
+    labs(title = 'Income distribution', x = 'Income', y = 'Frequency', fill = 'Clicked.on.Ad') +
+        scale_color_brewer(palette = 'Set1') +
+        theme(plot.title = element_text(size = 18, face = 'bold', color = 'darkmagenta'),
+             axis.title.x = element_text(size = 15, face = 'bold', color = 'darkmagenta'),
+             axis.title.y = element_text(size = 15, face = 'bold', color = 'darkmagenta'),
+             axis.text.x = element_text(size = 13, angle = 45),
+             axis.text.y = element_text(size = 13),
+             legend.title = element_text(size = 13, color = 'darkmagenta'),
+             legend.text = element_text(size = 12))
+```
+
+
+
+
+
+**Daily Internet Use**
+
+```{r}
+options(repr.plot.width = 13, repr.plot.height = 7)
+ggplot(data = audience_df4, aes(x = Daily.Internet.Usage, fill = Clicked.on.Ad))+
+    geom_histogram(bins = 35, color = 'cyan') + 
+    labs(title = 'Daily Internet Use distribution', x = 'Daily Internet Usage (minutes)', y = 'Frequency', fill = 'Clicked.on.Ad') +
+        scale_color_brewer(palette = 'Set1') +
+        theme(plot.title = element_text(size = 18, face = 'bold', color = 'darkmagenta'),
+             axis.title.x = element_text(size = 15, face = 'bold', color = 'darkmagenta'),
+             axis.title.y = element_text(size = 15, face = 'bold', color = 'darkmagenta'),
+             axis.text.x = element_text(size = 13, angle = 45),
+             axis.text.y = element_text(size = 13),
+             legend.title = element_text(size = 13, color = 'darkmagenta'),
+             legend.text = element_text(size = 12))
+```
+
+**Daily Time Spent on Site**
+```{r}
+options(repr.plot.width = 13, repr.plot.height = 7)
+ggplot(data = audience_df4, aes(x = Daily.Time.Spent.on.Site, fill = Clicked.on.Ad))+
+    geom_histogram(bins = 35, color = 'cyan') + 
+    labs(title = 'Daily Time Spent On Site', x = 'Time Spent(minutes)', y = 'Frequency', fill = 'Clicked.on.Ad') +
+        scale_color_brewer(palette = 'Set1') +
+        theme(plot.title = element_text(size = 18, face = 'bold', color = 'darkmagenta'),
+             axis.title.x = element_text(size = 15, face = 'bold', color = 'darkmagenta'),
+             axis.title.y = element_text(size = 15, face = 'bold', color = 'darkmagenta'),
+             axis.text.x = element_text(size = 13, angle = 45),
+             axis.text.y = element_text(size = 13),
+             legend.title = element_text(size = 13, color = 'darkmagenta'),
+             legend.text = element_text(size = 12))
+```
+
+**Most popular months for ad clicks**
+```{r}
+audience_df5 <- audience_df4
+
+```{r}
+audience_df5$month = as.double(audience_df5$month)
+```
+```
+
+```{r}
+options(repr.plot.width = 13, repr.plot.height = 7)
+ggplot(data = audience_df5, aes(x = month, fill = Clicked.on.Ad))+
+    geom_histogram(bins = 35, color = 'cyan') + 
+    labs(title = 'Ad Click Popularity every month', x = 'Month of the year', y = 'Frequency', fill = 'Clicked.on.Ad') +
+        scale_color_brewer(palette = 'Set1') +
+        theme(plot.title = element_text(size = 18, face = 'bold', color = 'darkmagenta'),
+             axis.title.x = element_text(size = 15, face = 'bold', color = 'darkmagenta'),
+             axis.title.y = element_text(size = 15, face = 'bold', color = 'darkmagenta'),
+             axis.text.x = element_text(size = 13, angle = 45),
+             axis.text.y = element_text(size = 13),
+             legend.title = element_text(size = 13, color = 'darkmagenta'),
+             legend.text = element_text(size = 12))
+```
+
+From the graph, we can see that ad engagement is mostly the same across all months. except maybe July which is slightly lower.
+
+```
+**Most popular hour of day for ad clicks**
+```{r}
+audience_df5$hour = as.double(audience_df5$hour)
+```
+
+
+```{r}
+options(repr.plot.width = 13, repr.plot.height = 7)
+ggplot(data = audience_df5, aes(x = hour, fill = Clicked.on.Ad))+
+    geom_histogram(bins = 35, color = 'cyan') + 
+    labs(title = 'Ad Click Popularity per hour of day', x = 'Hour of day', y = 'Frequency', fill = 'Clicked.on.Ad') +
+        scale_color_brewer(palette = 'Set1') +
+        theme(plot.title = element_text(size = 18, face = 'bold', color = 'darkmagenta'),
+             axis.title.x = element_text(size = 15, face = 'bold', color = 'darkmagenta'),
+             axis.title.y = element_text(size = 15, face = 'bold', color = 'darkmagenta'),
+             axis.text.x = element_text(size = 13, angle = 45),
+             axis.text.y = element_text(size = 13),
+             legend.title = element_text(size = 13, color = 'darkmagenta'),
+             legend.text = element_text(size = 12))
+```
+
+Our client's ad clicks are farly enely distributed across all hours of the day. This is probably because she advertises in many different territories. Nothing to change here. If there were hours that were doing badly, I'd have recommended she optimizes her ad spending to capitalize on the more profitable hours.
+
+# Conclusion & Recommendations
+Contrary to my first assessment of the data, I found that it was not aprropriate in more ways than one. However, there's a reason I was hired. They shone a light in the sky, and I responded to the Batcall. No complaints here, we made the data work and still got actionable insights in the end!
+
+Here are my recommendations:
+
+The **country** column, which I thought would provide very good data at the start, turned to kind of be a DUD. This is because the user countries are too many (high dimensionality). Perhaps the only recommendation I can give based on this is for her to **significantly** narrow down her target audience. Time and time again, that has proven to improve user engagement in the Social Media space. right now her efforts are stretched too thin.
+
+Her total userbase age spans from 19 to 61. However, from our visual tools, we can see that majority of the users that click on ads (Ad Clicks are our endgame) are in the late 30s to early 60s age bracket. I would recommend to our client that she selects ads that are more relevant ot this demographic. 
+
+Her users also skew more on the high income end of the spectrum. This was expected considering her age demographic data. Perhaps she could maximize revenue gain from her advertising by raising the cost of the courses, or introducing tiered lesson levels structured in a way that users are more likely to select the courses that cost more. She should be able to do this without losing users. Her demographicis older and has more spending money, and are more likely to value/ assess quantity before gasping at higher prices.
+
+Another key takeaway is that the overwhelming majority of users that click on ads spend less time on the site. They also spend less time on the internet (*Daily.Internet.Usage* feature). Based on that, it would be in our client's best interests to employ methods that capture the attention of her users quickly!  She can use floating CTA (Call to Action) buttons, mentions of the ads in the blog content (assuming the content and ads are related), A/B testing with different designs to see which site layout better "guides" users towards ad banners.
+
+
+
